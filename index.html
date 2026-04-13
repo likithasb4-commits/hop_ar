@@ -1,214 +1,139 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-<title>Polaris RZR | AR Experience</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Polaris RZR AR</title>
 
-<script type="module" src="https://ajax.googleapis.com/ajax/libs/model-viewer/3.4.0/model-viewer.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/meshoptimizer@0.18.1/meshopt_decoder.js"></script>
-<script>window.MeshoptDecoder = MeshoptDecoder;</script>
+  <!-- ✅ REQUIRED: model-viewer -->
+  <script type="module"
+    src="https://ajax.googleapis.com/ajax/libs/model-viewer/3.4.0/model-viewer.min.jsl, body {
+      margin: 0;
+      height: 100%;
+      background: #0d0d0d;
+      overflow: hidden;
+      font-family: Arial, sans-serif;
+      color: white;
+    }
 
-<style>
-html, body {
-  margin:0; height:100%; background:#0d0d0d; color:#fff;
-  font-family: Arial, sans-serif; overflow:hidden;
-}
+    #viewer {
+      width: 100vw;
+      height: 100vh;
+    }
 
-#landing, #viewer-wrap {
-  position:fixed; inset:0;
-  display:flex; align-items:center; justify-content:center;
-  flex-direction:column;
-}
+    #controls {
+      position: fixed;
+      bottom: 30px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      gap: 10px;
+      z-index: 10;
+    }
 
-#landing { background:#0d0d0d; z-index:2; }
-#landing.hidden { display:none; }
+    button {
+      padding: 10px 16px;
+      background: #b8d400;
+      border: none;
+      font-weight: bold;
+      cursor: pointer;
+    }
 
-#viewer-wrap { display:none; }
-#viewer-wrap.visible { display:block; }
-
-button {
-  background:#b8d400; border:none;
-  padding:14px 26px;
-  font-weight:700;
-  cursor:pointer;
-}
-
-#controls {
-  position:absolute; bottom:110px;
-  left:50%; transform:translateX(-50%);
-  display:flex; gap:10px;
-  z-index:10;
-}
-
-.ctrl-btn {
-  background:#111;
-  border:1px solid #b8d40055;
-  color:#fff;
-  font-size:12px;
-  padding:10px 14px;
-}
-
-.ctrl-btn.active {
-  background:#b8d40033;
-  border-color:#b8d400;
-  color:#b8d400;
-}
-
-#ar-button {
-  position:absolute; bottom:40px;
-  left:50%; transform:translateX(-50%);
-  z-index:10;
-}
-
-#toast {
-  position:absolute;
-  top:20px;
-  left:50%;
-  transform:translateX(-50%);
-  background:#111;
-  border:1px solid #b8d400;
-  padding:8px 16px;
-  font-size:12px;
-  opacity:0;
-  transition:.3s;
-}
-
-#toast.show { opacity:1; }
-</style>
+    .active {
+      background: #e85c0d;
+      color: black;
+    }
+  </style>
 </head>
 
 <body>
 
-<!-- LANDING -->
-<div id="landing">
-  <h1>Polaris RZR</h1>
-  <p>Experience AR</p>
-  <button onclick="launchViewer()">View in AR</button>
+<model-viewer
+  id="mv"
+  src="./RZR_SIM.glb"
+  ar
+  ar-modes="scene-viewer webxr quick-look"
+  camera-controls
+  auto-rotate
+  shadow-intensity="1"
+  exposure="1.1"
+  environment-image="neutral"
+  camera-orbit="0deg 75deg 6m"
+  min-camera-orbit="auto 30deg 4m"
+  max-camera-orbit="auto 120deg 10m"
+  style="background:#111;"
+>
+</model-viewer>
+
+<div id="controls">
+  <button onclick="toggleFlip()">Flip</button>
+  <button onclick="hop()">Hop</button>
+  <button id="snd" onclick="toggleSound()">Sound</button>
 </div>
 
-<!-- VIEWER -->
-<div id="viewer-wrap">
-
-  <model-viewer
-    id="mv"
-    src="./RZR_NEW_FINAL.glb"
-    camera-controls
-    auto-rotate
-    ar
-    ar-modes="scene-viewer webxr quick-look"
-    ar-placement="floor"
-    shadow-intensity="1"
-    exposure="1"
-    style="width:100%;height:100%;background:#111">
-    
-    <button id="ar-button" slot="ar-button">Place in your world</button>
-  </model-viewer>
-
-  <div id="controls">
-    <button class="ctrl-btn" id="flip-btn" onclick="toggleFlip()">Flip</button>
-    <button class="ctrl-btn" onclick="triggerHop()">Hop</button>
-    <button class="ctrl-btn" id="sound-btn" onclick="toggleSound()">Sound</button>
-  </div>
-
-  <div id="toast">Hint</div>
-</div>
-
-<audio id="engine-audio" loop preload="auto" playsinline></audio>
+<audio id="engine" loop playsinline></audio>
 
 <script>
 const mv = document.getElementById('mv');
-const landing = document.getElementById('landing');
-const viewer = document.getElementById('viewer-wrap');
-const toast = document.getElementById('toast');
-const engineAudio = document.getElementById('engine-audio');
-const soundBtn = document.getElementById('sound-btn');
-const flipBtn = document.getElementById('flip-btn');
+const engine = document.getElementById('engine');
+const sndBtn = document.getElementById('snd');
 
+let flipped = false;
 let soundOn = false;
-let flipMode = false;
-let audioUnlocked = false;
+let unlocked = false;
 
-/* ---------- HELPERS ---------- */
-function showToast(msg) {
-  toast.textContent = msg;
-  toast.classList.add('show');
-  setTimeout(() => toast.classList.remove('show'), 2500);
-}
-
-/* ---------- LAUNCH ---------- */
-function launchViewer() {
-  landing.classList.add('hidden');
-  viewer.classList.add('visible');
-}
-
-/* ---------- AUDIO UNLOCK ---------- */
-function unlockAudio() {
-  if (audioUnlocked) return;
-  engineAudio.src = "./Engine.wav";
-  engineAudio.load();
-  engineAudio.play().then(() => {
-    engineAudio.pause();
-    engineAudio.currentTime = 0;
-    audioUnlocked = true;
+/* ✅ AUDIO UNLOCK (REQUIRED) */
+function unlock() {
+  if (unlocked) return;
+  engine.src = "./Engine.wav";
+  engine.load();
+  engine.play().then(() => {
+    engine.pause();
+    engine.currentTime = 0;
+    unlocked = true;
   });
 }
 
-document.addEventListener('touchstart', unlockAudio, { once:true });
-document.addEventListener('click', unlockAudio, { once:true });
+document.addEventListener('click', unlock, { once:true });
+document.addEventListener('touchstart', unlock, { once:true });
 
-/* ---------- SOUND ---------- */
 function toggleSound() {
-  if (!audioUnlocked) unlockAudio();
+  if (!unlocked) unlock();
 
   if (soundOn) {
-    engineAudio.pause();
-    engineAudio.currentTime = 0;
-    soundBtn.classList.remove('active');
-    soundOn = false;
+    engine.pause();
+    sndBtn.classList.remove('active');
   } else {
-    engineAudio.play();
-    soundBtn.classList.add('active');
-    soundOn = true;
-    showToast('Engine on');
+    engine.play();
+    sndBtn.classList.add('active');
   }
+  soundOn = !soundOn;
 }
 
-/* ---------- SUSPENSION HOP ---------- */
-function triggerHop() {
-  mv.animate(
-    [
-      { cameraOrbit: '0deg 75deg 10m' },
-      { cameraOrbit: '0deg 80deg 9.4m' },
-      { cameraOrbit: '0deg 75deg 10m' },
-      { cameraOrbit: '0deg 78deg 9.7m' },
-      { cameraOrbit: '0deg 75deg 10m' }
-    ],
-    { duration: 900, easing: 'ease-in-out' }
-  );
-
-  showToast('Suspension hop');
+/* ✅ HOP (CAMERA BASED) */
+function hop() {
+  mv.animate([
+    { cameraOrbit: '0deg 75deg 6m' },
+    { cameraOrbit: '0deg 82deg 5.3m' },
+    { cameraOrbit: '0deg 75deg 6m' }
+  ], {
+    duration: 700,
+    easing: 'ease-in-out'
+  });
 }
 
-/* ---------- FLIP ---------- */
+/* ✅ FLIP VIEW */
 function toggleFlip() {
-  flipMode = !flipMode;
+  flipped = !flipped;
 
-  if (flipMode) {
-    mv.setAttribute('camera-orbit', '0deg 120deg 8m');
-    mv.setAttribute('min-camera-orbit', 'auto 0deg 5m');
-    mv.setAttribute('max-camera-orbit', 'auto 180deg 14m');
-    flipBtn.classList.add('active');
-    showToast('View underbody');
+  if (flipped) {
+    mv.setAttribute('camera-orbit', '0deg 120deg 6m');
   } else {
-    mv.setAttribute('camera-orbit', '0deg 75deg auto');
-    mv.setAttribute('min-camera-orbit', 'auto 15deg auto');
-    mv.setAttribute('max-camera-orbit', 'auto 90deg auto');
-    flipBtn.classList.remove('active');
-    showToast('Normal view');
+    mv.setAttribute('camera-orbit', '0deg 75deg 6m');
   }
 }
 </script>
 
 </body>
 </html>
+``
